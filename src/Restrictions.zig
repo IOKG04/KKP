@@ -2,6 +2,7 @@
 //! by the arena allocator passed to `fromInput`.
 
 const std = @import("std");
+const options = @import("options");
 
 const Input = @import("Input.zig");
 
@@ -20,11 +21,14 @@ classes: []const Class,
 
 teacher_table: []const []const u8,
 
-pub const TeacherId = u16;
+pub const TeacherBitboard = std.meta.Int(.unsigned, options.teacher_limit);
+pub const TeacherId = std.math.Log2Int(TeacherBitboard);
 pub const Class = struct {
     name: []const u8,
+    /// TODO: Maybe remove this if it doesn't prove necessary.
     mandatory: []const TeacherId,
     optional: []const TeacherId,
+    mandatory_bitboard: TeacherBitboard,
 };
 
 pub fn fromInput(gpa: Allocator, arena: Allocator, input: Input) Allocator.Error!Restrictions {
@@ -36,6 +40,7 @@ pub fn fromInput(gpa: Allocator, arena: Allocator, input: Input) Allocator.Error
         if (teacher_table.get(t_inp)) |_| {
             @branchHint(.unlikely); // Considering this is first and we expect the user to not do duplicates, this is quite unlikely.
         } else {
+            // TODO: We might not even have to add them to the table.
             try teacher_table.put(gpa, t_inp, teacher_i);
             teacher_i += 1;
         }
@@ -47,12 +52,17 @@ pub fn fromInput(gpa: Allocator, arena: Allocator, input: Input) Allocator.Error
     for (input.classes, classes) |class_inp, *class_out| {
         class_out.name = try arena.dupe(u8, class_inp.name);
 
+        class_out.mandatory_bitboard = 0;
         const mandatory = try arena.alloc(TeacherId, class_inp.mandatory.len);
         for (class_inp.mandatory, mandatory) |t_inp, *t_out| {
             if (teacher_table.get(t_inp)) |id| {
-                if (id >= not_available_cutoff) t_out.* = id;
+                if (id >= not_available_cutoff) {
+                    t_out.* = id;
+                    class_out.mandatory_bitboard |= @shlExact(@as(TeacherBitboard, 1), id);
+                }
             } else {
                 t_out.* = teacher_i;
+                class_out.mandatory_bitboard |= @shlExact(@as(TeacherBitboard, 1), teacher_i);
                 try teacher_table.put(gpa, t_inp, teacher_i);
                 teacher_i += 1;
             }

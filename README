@@ -4,3 +4,7 @@ Class Conference Planner (CCP)
 You tell it which classes exist, which teachers do each class,
 how many conferences can happen at any time and how many time
 slots you have, and it tells you the possible arrangements.
+
+Due to some optimizations being used here, only 256 teachers
+can be at the school. If that limit needs to be increased,
+pass `-Dteacher_limit=NUM` to `zig build`.
