@@ -14,8 +14,8 @@ const Restrictions = @This();
 room_count: u16,
 time_slots: u16,
 
-/// Teachers to be ignored in search.
-not_available: []const TeacherId,
+/// Teacher lists do not contain entries
+/// from the input's `not_available`.
 classes: []const Class,
 
 teacher_table: []const []const u8,
@@ -30,19 +30,18 @@ pub const Class = struct {
 pub fn fromInput(gpa: Allocator, arena: Allocator, input: Input) Allocator.Error!Restrictions {
     var teacher_table: std.StringHashMapUnmanaged(TeacherId) = .empty;
     defer teacher_table.deinit(gpa);
-    var teacher_i: u16 = 0;
+    var teacher_i: TeacherId = 0;
 
-    const not_available = try arena.alloc(TeacherId, input.not_available.len);
-    for (input.not_available, not_available) |t_inp, *t_out| {
-        if (teacher_table.get(t_inp)) |id| {
+    for (input.not_available) |t_inp| {
+        if (teacher_table.get(t_inp)) |_| {
             @branchHint(.unlikely); // Considering this is first and we expect the user to not do duplicates, this is quite unlikely.
-            t_out.* = id;
         } else {
-            t_out.* = teacher_i;
             try teacher_table.put(gpa, t_inp, teacher_i);
             teacher_i += 1;
         }
     }
+    // Any id below this is in `not_available`.
+    const not_available_cutoff = teacher_i;
 
     const classes = try arena.alloc(Class, input.classes.len);
     for (input.classes, classes) |class_inp, *class_out| {
@@ -51,7 +50,7 @@ pub fn fromInput(gpa: Allocator, arena: Allocator, input: Input) Allocator.Error
         const mandatory = try arena.alloc(TeacherId, class_inp.mandatory.len);
         for (class_inp.mandatory, mandatory) |t_inp, *t_out| {
             if (teacher_table.get(t_inp)) |id| {
-                t_out.* = id;
+                if (id >= not_available_cutoff) t_out.* = id;
             } else {
                 t_out.* = teacher_i;
                 try teacher_table.put(gpa, t_inp, teacher_i);
@@ -63,7 +62,7 @@ pub fn fromInput(gpa: Allocator, arena: Allocator, input: Input) Allocator.Error
         const optional = try arena.alloc(TeacherId, class_inp.optional.len);
         for (class_inp.optional, optional) |t_inp, *t_out| {
             if (teacher_table.get(t_inp)) |id| {
-                t_out.* = id;
+                if (id >= not_available_cutoff) t_out.* = id;
             } else {
                 t_out.* = teacher_i;
                 try teacher_table.put(gpa, t_inp, teacher_i);
@@ -82,7 +81,6 @@ pub fn fromInput(gpa: Allocator, arena: Allocator, input: Input) Allocator.Error
     return .{
         .room_count = input.room_count,
         .time_slots = input.time_slots,
-        .not_available = not_available,
         .classes = classes,
         .teacher_table = array_teacher_table,
     };
