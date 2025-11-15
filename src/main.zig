@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const CliOptions = @import("CliOptions.zig");
 const Input = @import("Input.zig");
 const Restrictions = @import("Restrictions.zig");
+const TimeSlot = @import("TimeSlot.zig");
 
 pub fn main() !void {
     const using_dbg_allocator = builtin.mode != .ReleaseFast;
@@ -40,9 +41,11 @@ pub fn main() !void {
                                     // 4) Plan filtering
         .disable_printing = cli_options.quiet,
     });
+    defer progress_root.end();
 
     const restrictions: Restrictions = blk: {
         const progress_parse_input = progress_root.start("Parse input", 2);
+        defer progress_parse_input.end();
 
         const input = try Input.fromFile(gpa, cli_options.input, stdout);
         defer input.deinit(gpa);
@@ -53,5 +56,20 @@ pub fn main() !void {
 
         break :blk r;
     };
-    _ = restrictions;
+
+    const time_slots = try TimeSlot.generateTimeSlots(gpa, restrictions, progress_root);
+    defer {
+        for (time_slots) |ts| {
+            gpa.free(ts.classes);
+        }
+        gpa.free(time_slots);
+    }
+
+    for (time_slots) |ts| {
+        for (ts.classes) |class| {
+            try stdout.print("{d} ", .{class});
+        }
+        try stdout.print("\n", .{});
+    }
+    try stdout.flush();
 }
