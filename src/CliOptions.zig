@@ -11,6 +11,10 @@ output: ?[]const u8,
 /// Number of concurrent jobs.
 jobs: usize,
 
+/// Whether to print stuff.
+/// (doesn't diable errors and program output)
+quiet: bool,
+
 /// Slices in returned object only valid
 /// as long as `args` is.
 pub fn parse(args: []const []const u8, stdout: *std.Io.Writer) ParseError!CliOptions {
@@ -18,6 +22,7 @@ pub fn parse(args: []const []const u8, stdout: *std.Io.Writer) ParseError!CliOpt
         .input = undefined,
         .output = null,
         .jobs = @max(1, std.Thread.getCpuCount() catch 1),
+        .quiet = false,
     };
     var input_set = false;
 
@@ -54,6 +59,8 @@ pub fn parse(args: []const []const u8, stdout: *std.Io.Writer) ParseError!CliOpt
                     return error.ArgJustStraightUpWrong;
                 },
             };
+        } else if (isArg("-q", "--quiet", arg)) |_| {
+            outp.quiet = true;
         } else {
             input_set = true;
             outp.input = arg;
@@ -88,6 +95,7 @@ pub const help_message =
     \\Options:
     \\ -o=FILE --output=FILE  Write output to FILE, default: stdout
     \\ -j=NUM  --jobs=NUM     Use NUM threads, default: all available
+    \\ -q      --quiet        Do not print to stdout or stderr unnecessarily
     \\
     \\If an option or INPUT is set multiple times, the last one is used.
     \\

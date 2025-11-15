@@ -2,14 +2,16 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const CliOptions = @import("CliOptions.zig");
+const Input = @import("Input.zig");
+const Restrictions = @import("Restrictions.zig");
 
 pub fn main() !void {
-    const using_smp_allocator = builtin.mode == .ReleaseFast;
-    var dbg_allocator = if (using_smp_allocator) {} else std.heap.DebugAllocator(.{}).init;
-    defer { if (!using_smp_allocator) _ = dbg_allocator.deinit(); }
-    const gpa = if (using_smp_allocator) std.heap.smp_allocator else dbg_allocator.allocator();
+    const using_dbg_allocator = builtin.mode != .ReleaseFast;
+    var dbg_allocator = if (using_dbg_allocator) std.heap.DebugAllocator(.{}).init else {};
+    defer { if (using_dbg_allocator) _ = dbg_allocator.deinit(); }
+    const gpa = if (using_dbg_allocator) dbg_allocator.allocator() else std.heap.smp_allocator;
 
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var arena_allocator = std.heap.ArenaAllocator.init(if (using_dbg_allocator) gpa else std.heap.page_allocator); // Default to `page_allocator` cause apparently it's faster (haven't tested myself).
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
@@ -29,4 +31,27 @@ pub fn main() !void {
         .n_jobs = cli_options.jobs -| 1,
     });
     defer thread_pool.deinit();
+
+    const progress_root = std.Progress.start(.{
+        .root_name = "KKP",
+        .estimated_total_items = 4, // 1) Parse input
+                                    // 2) Combination generation
+                                    // 3) Plan generation
+                                    // 4) Plan filtering
+        .disable_printing = cli_options.quiet,
+    });
+
+    const restrictions: Restrictions = blk: {
+        const progress_parse_input = progress_root.start("Parse input", 2);
+
+        const input = try Input.fromFile(gpa, cli_options.input, stdout);
+        defer input.deinit(gpa);
+        progress_parse_input.completeOne();
+
+        const r = try Restrictions.fromInput(gpa, arena, input);
+        progress_parse_input.completeOne();
+
+        break :blk r;
+    };
+    _ = restrictions;
 }

@@ -1,0 +1,48 @@
+.{
+    .room_count = 2,
+    .time_slots = 9,
+
+    .not_available = .{
+        "Aa",
+        "Bb",
+        "Cc",
+    },
+
+    .classes = .{
+        .{
+            .name = "A",
+            .mandatory = .{
+                "Ab",
+                "Ac",
+            },
+            .optional = .{
+                "Aa",
+                "Ca",
+            },
+        },
+        .{
+            .name = "B",
+            .mandatory = .{
+                "Ab",
+                "Ba",
+                "Bb",
+            },
+            .optional = .{
+                "Cb",
+            },
+        },
+        .{
+            .name = "C",
+            .mandatory = .{
+                "Ca",
+                "Cb",
+                "Cc",
+            },
+            .optional = .{
+                "Aa",
+                "Bc",
+                "Bb",
+            },
+        },
+    },
+}
