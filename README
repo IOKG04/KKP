@@ -1,0 +1,6 @@
+Klassen Konferenz Planer (KKP)
+Class Conference Planner (CCP)
+
+You tell it which classes exist, which teachers do each class,
+how many conferences can happen at any time and how many time
+slots you have, and it tells you the possible arrangements.

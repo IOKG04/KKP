@@ -1,0 +1,7 @@
+.{
+    .name = .KKP,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.15.2",
+    .paths = .{""},
+    .fingerprint = 0xfb687c093e5d3d3f,
+}
