@@ -1,5 +1,7 @@
 //! Anything allocated in this structure is saved
 //! by the arena allocator passed to `fromInput`.
+//!
+//! Asserts amount of teacher <= `options.teacher_limit`
 
 const std = @import("std");
 const options = @import("options");

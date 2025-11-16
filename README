@@ -5,6 +5,8 @@ You tell it which classes exist, which teachers do each class,
 how many conferences can happen at any time and how many time
 slots you have, and it tells you the possible arrangements.
 
-Due to some optimizations being used here, only 256 teachers
+Due to some optimizations being used here, only 255 teachers
 can be at the school. If that limit needs to be increased,
 pass `-Dteacher_limit=NUM` to `zig build`.
+Same goes for the amount of classes, limited to 63. This can
+be changed with `-Dclass_limit=NUM`.

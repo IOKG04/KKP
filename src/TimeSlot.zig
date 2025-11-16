@@ -1,9 +1,12 @@
 //! A combination of class conferences held concurrently.
 //!
 //! Associated with a `Restrictions`.
+//!
 //! Asserts `associated_restrictions.room_count > 0`.
+//! Asserts amount of classes <= `options.class_limit`
 
 const std = @import("std");
+const options = @import("options");
 
 const Restrictions = @import("Restrictions.zig");
 
@@ -16,7 +19,12 @@ const TimeSlot = @This();
 /// Indexes into `associated_restrictions.classes`.
 ///
 /// Length guarantied to equal `associated_restrictions.room_count`.
-classes: []const usize,
+/// Guarantied to be < `options.class_limit`.
+classes: []const ClassId,
+classes_bitboard: ClassBitboard,
+
+pub const ClassBitboard = std.meta.Int(.unsigned, options.class_limit);
+pub const ClassId = std.math.Log2IntCeil(ClassBitboard);
 
 pub fn mandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) TeacherBitboard {
     var outp: TeacherBitboard = 0;
@@ -64,22 +72,32 @@ pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_ro
         }
     }
 
-    const indecies = try gpa.alloc(usize, restrictions.room_count);
+    const indecies = try gpa.alloc(ClassId, restrictions.room_count);
     defer gpa.free(indecies);
     for (indecies, 0..) |*idx, i| {
-        idx.* = i;
+        idx.* = @intCast(i);
     }
 
-    while (true) : (if (!increaseIndecies(indecies, restrictions.classes.len)) break) {
+    while (true) : (if (!increaseIndecies(indecies, @intCast(restrictions.classes.len))) break) {
         defer progress_tested.completeOne();
 
-        const pseudo_time_slot: TimeSlot = .{ .classes = indecies };
+        const pseudo_time_slot: TimeSlot = .{
+            .classes = indecies,
+            .classes_bitboard = undefined, // Bitboard not important for `hasMandatoryOverlap`.
+        };
         if (pseudo_time_slot.hasMandatoryOverlap(restrictions)) {
             continue;
         }
 
         const time_slot: TimeSlot = .{
-            .classes = try gpa.dupe(usize, indecies),
+            .classes = try gpa.dupe(ClassId, indecies),
+            .classes_bitboard = blk: {
+                var o: ClassBitboard = 0;
+                for (indecies) |i| {
+                    o |= @shlExact(@as(ClassBitboard, 1), @intCast(i));
+                }
+                break :blk o;
+            },
         };
         errdefer gpa.free(time_slot.classes);
         try outp_list.append(gpa, time_slot);
@@ -94,7 +112,7 @@ pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_ro
 /// and `indecies[i] < max`.
 ///
 /// Returns `false` if `indecies` can no longer be increased.
-fn increaseIndecies(indecies: []usize, max: usize) bool {
+fn increaseIndecies(indecies: []ClassId, max: ClassId) bool {
     for (0..indecies.len) |i_inv| {
         const i = indecies.len - 1 - i_inv;
         indecies[i] += 1;
@@ -108,7 +126,10 @@ fn increaseIndecies(indecies: []usize, max: usize) bool {
         assert(i > 0);
 
         indecies[i] = indecies[i - 1] + 2;
-        if (indecies[i] >= actual_max) return false; // Hit maximum.
+        if (indecies[i] >= actual_max) {
+            assert(i == indecies.len - 1);
+            return false; // Hit maximum.
+        }
     }
     unreachable;
 }

@@ -5,7 +5,8 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const options = b.addOptions();
-    options.addOption(u16, "teacher_limit", std.math.ceilPowerOfTwoAssert(u16, b.option(u16, "teacher_limit", "Maximum amount of teachers that can be handled") orelse 256));
+    options.addOption(u16, "teacher_limit", b.option(u16, "teacher_limit", "Maximum amount of teachers that can be handled") orelse 255);
+    options.addOption(u16, "class_limit", b.option(u16, "class_limit", "Maximum amount of classes that can be handled") orelse 63);
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
