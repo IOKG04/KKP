@@ -57,6 +57,8 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
     const progress_valid = progress_generate_plans.start("Valid combinations found", 0);
     defer progress_valid.end();
 
+    // TODO: Make this stuff use the normal gpa.
+    //       This eats ram like there's no tomrrow..
     var remaining_arena_allocator = std.heap.ArenaAllocator.init(gpa);
     defer remaining_arena_allocator.deinit();
     const remaining_arena = remaining_arena_allocator.allocator();
@@ -89,7 +91,7 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
         defer progress_tested.completeOne();
 
         if (current_branch.hasClassOverlap()) {
-            current_branch.free(gpa);
+            gpa.free(current_branch.time_slots);
             continue;
         }
 

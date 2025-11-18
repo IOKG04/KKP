@@ -42,7 +42,6 @@ pub fn main() !void {
                                     // 4) Plan filtering
         .disable_printing = cli_options.quiet,
     });
-    defer progress_root.end();
 
     const restrictions: Restrictions = blk: {
         const progress_parse_input = progress_root.start("Parse input", 2);
@@ -74,6 +73,8 @@ pub fn main() !void {
         gpa.free(unfiltered_plans);
     }
 
+    progress_root.end();
+
     for (unfiltered_plans) |plan| {
         for (plan.time_slots) |ts| {
             try stdout.print("{{ ", .{});
@@ -85,5 +86,6 @@ pub fn main() !void {
         }
         try stdout.print("\n", .{});
     }
+    try stdout.print("Found {d} plans in total.\n", .{unfiltered_plans.len});
     try stdout.flush();
 }

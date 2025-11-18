@@ -11,13 +11,13 @@ room_count: u16,
 time_slots: u16,
 
 /// Teachers to be ignored in search.
-not_available: []const TeacherId,
+not_available: []const TeacherId = &.{},
 classes: []const Class,
 
 pub const Class = struct {
     name: []const u8,
     mandatory: []const TeacherId,
-    optional: []const TeacherId,
+    optional: []const TeacherId = &.{},
 };
 pub const TeacherId = []const u8;
 
