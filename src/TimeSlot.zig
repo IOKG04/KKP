@@ -66,9 +66,9 @@ pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_ro
     const progress_generate_ts = progress_root.start("Generate possible time slots", 0);
     defer progress_generate_ts.end();
     const progress_tested = progress_generate_ts.start("Combinations tested", combinations);
-    //defer progress_tested.end();
+    defer progress_tested.end();
     const progress_valid = progress_generate_ts.start("Valid combinations found", 0);
-    //defer progress_valid.end();
+    defer progress_valid.end();
 
     var outp_list: std.ArrayList(TimeSlot) = .empty;
     errdefer outp_list.deinit(gpa);

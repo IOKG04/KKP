@@ -53,9 +53,9 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
     const progress_generate_plans = progress_root.start("Generate possible plans", 0);
     defer progress_generate_plans.end();
     const progress_tested = progress_generate_plans.start("Branches tested", time_slots.len);
-    //defer progress_tested.end();
+    defer progress_tested.end();
     const progress_valid = progress_generate_plans.start("Valid combinations found", 0);
-    //defer progress_valid.end();
+    defer progress_valid.end();
 
     var remaining_arena_allocator = std.heap.ArenaAllocator.init(gpa);
     defer remaining_arena_allocator.deinit();
