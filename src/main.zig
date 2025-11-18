@@ -51,11 +51,13 @@ pub fn main() !void {
         defer input.deinit(gpa);
         progress_parse_input.completeOne();
 
-        const r = try Restrictions.fromInput(gpa, arena, input);
+        const r = try Restrictions.fromInput(gpa, input);
+        errdefer r.free(gpa);
         progress_parse_input.completeOne();
 
         break :blk r;
     };
+    defer restrictions.free(gpa);
 
     const time_slots = try TimeSlot.generateTimeSlots(gpa, restrictions, progress_root);
     defer gpa.free(time_slots);

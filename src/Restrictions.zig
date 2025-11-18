@@ -1,6 +1,3 @@
-//! Anything allocated in this structure is saved
-//! by the arena allocator passed to `fromInput`.
-//!
 //! Asserts amount of teacher <= `options.teacher_limit`
 
 const std = @import("std");
@@ -27,13 +24,13 @@ pub const TeacherBitboard = std.meta.Int(.unsigned, options.teacher_limit);
 pub const TeacherId = std.math.Log2Int(TeacherBitboard);
 pub const Class = struct {
     name: []const u8,
-    /// TODO: Maybe remove this if it doesn't prove necessary.
-    mandatory: []const TeacherId,
-    optional: []const TeacherId,
+    /// TODO: Function to turn this into an array.
+    optional_bitboard: TeacherBitboard,
+    /// TODO: Function to turn this into an array.
     mandatory_bitboard: TeacherBitboard,
 };
 
-pub fn fromInput(gpa: Allocator, arena: Allocator, input: Input) Allocator.Error!Restrictions {
+pub fn fromInput(gpa: Allocator, input: Input) Allocator.Error!Restrictions {
     var teacher_table: std.StringHashMapUnmanaged(TeacherId) = .empty;
     defer teacher_table.deinit(gpa);
     var teacher_i: TeacherId = 0;
@@ -50,44 +47,56 @@ pub fn fromInput(gpa: Allocator, arena: Allocator, input: Input) Allocator.Error
     // Any id below this is in `not_available`.
     const not_available_cutoff = teacher_i;
 
-    const classes = try arena.alloc(Class, input.classes.len);
+    const classes = try gpa.alloc(Class, input.classes.len);
+    errdefer gpa.free(classes);
+    var class_names_allocated: usize = 0;
+    errdefer {
+        for (classes[0..class_names_allocated]) |class| {
+            gpa.free(class.name);
+        }
+    }
     for (input.classes, classes) |class_inp, *class_out| {
-        class_out.name = try arena.dupe(u8, class_inp.name);
+        class_out.name = try gpa.dupe(u8, class_inp.name);
+        class_names_allocated += 1;
 
         class_out.mandatory_bitboard = 0;
-        const mandatory = try arena.alloc(TeacherId, class_inp.mandatory.len);
-        for (class_inp.mandatory, mandatory) |t_inp, *t_out| {
+        for (class_inp.mandatory) |t_inp| {
             if (teacher_table.get(t_inp)) |id| {
                 if (id >= not_available_cutoff) {
-                    t_out.* = id;
                     class_out.mandatory_bitboard |= @shlExact(@as(TeacherBitboard, 1), id);
                 }
             } else {
-                t_out.* = teacher_i;
                 class_out.mandatory_bitboard |= @shlExact(@as(TeacherBitboard, 1), teacher_i);
                 try teacher_table.put(gpa, t_inp, teacher_i);
                 teacher_i += 1;
             }
         }
-        class_out.mandatory = mandatory;
 
-        const optional = try arena.alloc(TeacherId, class_inp.optional.len);
-        for (class_inp.optional, optional) |t_inp, *t_out| {
+        class_out.optional_bitboard = 0;
+        for (class_inp.optional) |t_inp| {
             if (teacher_table.get(t_inp)) |id| {
-                if (id >= not_available_cutoff) t_out.* = id;
+                if (id >= not_available_cutoff) {
+                    class_out.optional_bitboard |= @shlExact(@as(TeacherBitboard, 1), teacher_i);
+                }
             } else {
-                t_out.* = teacher_i;
+                class_out.optional_bitboard |= @shlExact(@as(TeacherBitboard, 1), teacher_i);
                 try teacher_table.put(gpa, t_inp, teacher_i);
                 teacher_i += 1;
             }
         }
-        class_out.optional = optional;
     }
 
-    const array_teacher_table = try arena.alloc([]const u8, teacher_i);
+    const array_teacher_table = try gpa.alloc([]const u8, teacher_i);
+    errdefer gpa.free(array_teacher_table);
+    var teacher_names_done: usize = 0;
+    errdefer for (array_teacher_table[0..teacher_names_done]) |teacher_name| {
+        gpa.free(teacher_name);
+    };
+
     var teacher_table_iterator = teacher_table.iterator();
     while (teacher_table_iterator.next()) |entry| {
-        array_teacher_table[entry.value_ptr.*] = try arena.dupe(u8, entry.key_ptr.*);
+        array_teacher_table[entry.value_ptr.*] = try gpa.dupe(u8, entry.key_ptr.*);
+        teacher_names_done += 1;
     }
 
     return .{
@@ -96,4 +105,16 @@ pub fn fromInput(gpa: Allocator, arena: Allocator, input: Input) Allocator.Error
         .classes = classes,
         .teacher_table = array_teacher_table,
     };
+}
+
+pub fn free(r: Restrictions, gpa: Allocator) void {
+    for (r.teacher_table) |teacher_name| {
+        gpa.free(teacher_name);
+    }
+    gpa.free(r.teacher_table);
+
+    for (r.classes) |class| {
+        gpa.free(class.name);
+    }
+    gpa.free(r.classes);
 }
