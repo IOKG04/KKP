@@ -57,12 +57,6 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
     const progress_valid = progress_generate_plans.start("Valid combinations found", 0);
     defer progress_valid.end();
 
-    // TODO: Make this stuff use the normal gpa.
-    //       This eats ram like there's no tomrrow..
-    var remaining_arena_allocator = std.heap.ArenaAllocator.init(gpa);
-    defer remaining_arena_allocator.deinit();
-    const remaining_arena = remaining_arena_allocator.allocator();
-
     // This one copies `time_slots`.
     var outp: std.ArrayList(Plan) = .empty;
     errdefer {
@@ -90,13 +84,19 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
     while (inbetweens.pop()) |current_branch| {
         defer progress_tested.completeOne();
 
+        const has_remaining_classes = additional_time_slot == 1 and current_branch.time_slots.len == full_time_slots + additional_time_slot;
+
         if (current_branch.hasClassOverlap()) {
+            if (has_remaining_classes) gpa.free(current_branch.time_slots[current_branch.time_slots.len - 1].classes);
             gpa.free(current_branch.time_slots);
             continue;
         }
 
         if (current_branch.time_slots.len == full_time_slots + additional_time_slot) {
-            defer gpa.free(current_branch.time_slots);
+            defer {
+                if (has_remaining_classes) gpa.free(current_branch.time_slots[current_branch.time_slots.len - 1].classes);
+                gpa.free(current_branch.time_slots);
+            }
 
             const plan_as_time_slots = try gpa.alloc(TimeSlot, current_branch.time_slots.len);
             errdefer gpa.free(plan_as_time_slots);
@@ -131,7 +131,8 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
             const needed_bitboard = (~covered_bitboard) & (@as(ClassBitboard, std.math.maxInt(ClassBitboard)) >> @intCast(options.class_limit - restrictions.classes.len));
             assert(@popCount(needed_bitboard) == remaining_classes);
 
-            const needed_classes = try remaining_arena.alloc(ClassId, remaining_classes);
+            const needed_classes = try gpa.alloc(ClassId, remaining_classes);
+            errdefer gpa.free(needed_classes);
             var insert_i: usize = 0;
             for (0..options.class_limit) |class_id| {
                 const mask = @shlExact(@as(ClassBitboard, 1), @intCast(class_id));

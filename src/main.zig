@@ -73,6 +73,8 @@ pub fn main() !void {
         gpa.free(unfiltered_plans);
     }
 
+    // TODO: Filter plans
+
     progress_root.end();
 
     for (unfiltered_plans) |plan| {
