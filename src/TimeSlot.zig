@@ -18,15 +18,17 @@ const TimeSlot = @This();
 
 /// Indexes into `associated_restrictions.classes`.
 ///
-/// Length guarantied to equal `associated_restrictions.room_count`.
+/// Length guarantied to be <= `associated_restrictions.room_count`.
 /// Guarantied to be < `options.class_limit`.
 classes: []const ClassId,
 classes_bitboard: ClassBitboard,
 
 pub const ClassBitboard = std.meta.Int(.unsigned, options.class_limit);
-pub const ClassId = std.math.Log2IntCeil(ClassBitboard);
+pub const ClassId = std.math.Log2Int(ClassBitboard);
+pub const ClassIdCeil = std.math.Log2IntCeil(ClassBitboard);
 
 pub fn mandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) TeacherBitboard {
+    assert(ts.classes.len <= restrictions.room_count);
     var outp: TeacherBitboard = 0;
     for (ts.classes, 0..) |ci_0, i| {
         const class_0 = restrictions.classes[ci_0];
@@ -37,6 +39,7 @@ pub fn mandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) TeacherBitboar
     }
     return outp;
 }
+/// Returns `true` iff one or more teachers are mandatory twice or more.
 pub fn hasMandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) bool {
     return ts.mandatoryOverlap(restrictions) != 0;
 }
@@ -44,10 +47,11 @@ pub fn hasMandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) bool {
 /// Generates all possible non-overlapping time slots.
 ///
 /// Asserts `restrictions.classes.len >= restrictions.root_count`.
+///
 /// The time slots themselves have to be freed too!
 ///
 /// TODO: Make multithreaded.
-pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_root: std.Progress.Node) Allocator.Error![]const TimeSlot {
+pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_root: std.Progress.Node) Allocator.Error![]TimeSlot {
     const combinations: usize = blk: { // n choose k
         const n = restrictions.classes.len;
         const k = restrictions.room_count;
@@ -62,7 +66,9 @@ pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_ro
     const progress_generate_ts = progress_root.start("Generate possible time slots", 0);
     defer progress_generate_ts.end();
     const progress_tested = progress_generate_ts.start("Combinations tested", combinations);
+    //defer progress_tested.end();
     const progress_valid = progress_generate_ts.start("Valid combinations found", 0);
+    //defer progress_valid.end();
 
     var outp_list: std.ArrayList(TimeSlot) = .empty;
     errdefer outp_list.deinit(gpa);
@@ -94,7 +100,7 @@ pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_ro
             .classes_bitboard = blk: {
                 var o: ClassBitboard = 0;
                 for (indecies) |i| {
-                    o |= @shlExact(@as(ClassBitboard, 1), @intCast(i));
+                    o |= @shlExact(@as(ClassBitboard, 1), i);
                 }
                 break :blk o;
             },
@@ -112,7 +118,7 @@ pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_ro
 /// and `indecies[i] < max`.
 ///
 /// Returns `false` if `indecies` can no longer be increased.
-fn increaseIndecies(indecies: []ClassId, max: ClassId) bool {
+fn increaseIndecies(indecies: []ClassId, max: ClassIdCeil) bool {
     for (0..indecies.len) |i_inv| {
         const i = indecies.len - 1 - i_inv;
         indecies[i] += 1;

@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const CliOptions = @import("CliOptions.zig");
 const Input = @import("Input.zig");
 const Restrictions = @import("Restrictions.zig");
+const Plan = @import("Plan.zig");
 const TimeSlot = @import("TimeSlot.zig");
 
 pub fn main() !void {
@@ -26,12 +27,12 @@ pub fn main() !void {
         else => return err,
     };
 
-    var thread_pool: std.Thread.Pool = undefined;
-    try thread_pool.init(.{
-        .allocator = gpa,
-        .n_jobs = cli_options.jobs -| 1,
-    });
-    defer thread_pool.deinit();
+//    var thread_pool: std.Thread.Pool = undefined;
+//    try thread_pool.init(.{
+//        .allocator = gpa,
+//        .n_jobs = cli_options.jobs -| 1,
+//    });
+//    defer thread_pool.deinit();
 
     const progress_root = std.Progress.start(.{
         .root_name = "KKP",
@@ -65,9 +66,22 @@ pub fn main() !void {
         gpa.free(time_slots);
     }
 
-    for (time_slots) |ts| {
-        for (ts.classes) |class| {
-            try stdout.print("{d} ", .{class});
+    const unfiltered_plans = try Plan.generatePlans(gpa, restrictions, time_slots, progress_root);
+    defer {
+        for (unfiltered_plans) |plan| {
+            plan.free(gpa);
+        }
+        gpa.free(unfiltered_plans);
+    }
+
+    for (unfiltered_plans) |plan| {
+        for (plan.time_slots) |ts| {
+            try stdout.print("{{ ", .{});
+            for (ts.classes) |class_id| {
+                const class_name = restrictions.classes[class_id].name;
+                try stdout.print("{s} ", .{ class_name });
+            }
+            try stdout.print("}}\n", .{});
         }
         try stdout.print("\n", .{});
     }

@@ -1,6 +1,6 @@
 .{
     .room_count = 2,
-    .time_slots = 9,
+    .time_slots = 2,
 
     .not_available = .{
         "Aa",
