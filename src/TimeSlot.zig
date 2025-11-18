@@ -16,39 +16,77 @@ const TeacherBitboard = Restrictions.TeacherBitboard;
 
 const TimeSlot = @This();
 
-/// Indexes into `associated_restrictions.classes`.
-///
-/// Length guarantied to be <= `associated_restrictions.room_count`.
-/// Guarantied to be < `options.class_limit`.
-classes: []const ClassId,
-classes_bitboard: ClassBitboard,
+bitboard: ClassBitboard,
 
 pub const ClassBitboard = std.meta.Int(.unsigned, options.class_limit);
 pub const ClassId = std.math.Log2Int(ClassBitboard);
 pub const ClassIdCeil = std.math.Log2IntCeil(ClassBitboard);
 
-pub fn mandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) TeacherBitboard {
-    assert(ts.classes.len <= restrictions.room_count);
+fn classesMandatoryOverlap(ts_classes: []const ClassId, restrictions: Restrictions) TeacherBitboard {
     var outp: TeacherBitboard = 0;
-    for (ts.classes, 0..) |ci_0, i| {
+    for (ts_classes, 0..) |ci_0, i| {
         const class_0 = restrictions.classes[ci_0];
-        for (ts.classes[(i + 1)..]) |ci_1| {
+        for (ts_classes[(i + 1)..]) |ci_1| {
             const class_1 = restrictions.classes[ci_1];
             outp |= class_0.mandatory_bitboard & class_1.mandatory_bitboard;
         }
     }
     return outp;
 }
+fn classesHasMandatoryOverlap(ts_classes: []const ClassId, restrictions: Restrictions) bool {
+    return classesMandatoryOverlap(ts_classes, restrictions) != 0;
+}
+/// Asserts `restrictions.room_count <= options.class_limit`.
+pub fn mandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) TeacherBitboard {
+    // Create an FBA to circumvent having to pass a gpa.
+    // With default settings, this is gonna be around
+    // 256 bytes extra on the stack.
+    assert(restrictions.room_count <= options.class_limit);
+    var buf: [options.class_limit * @sizeOf(ClassId)]u8 = undefined;
+    var buffer_allocator = std.heap.FixedBufferAllocator.init(&buf);
+    const arena = buffer_allocator.allocator();
+
+    const ts_classes = ts.classes(arena) catch unreachable;
+    return classesMandatoryOverlap(ts_classes, restrictions);
+}
 /// Returns `true` iff one or more teachers are mandatory twice or more.
 pub fn hasMandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) bool {
     return ts.mandatoryOverlap(restrictions) != 0;
 }
 
+pub fn classesLength(ts: TimeSlot) usize {
+    return @popCount(ts.bitboard);
+}
+/// Indexes into `associated_restrictions.classes`.
+///
+/// Guarantied to be < `options.class_limit`.
+pub fn classes(ts: TimeSlot, gpa: Allocator) Allocator.Error![]ClassId {
+    const outp = try gpa.alloc(ClassId, ts.classesLength());
+    errdefer gpa.free(outp);
+
+    var i: usize = 0;
+    for (0..options.class_limit) |class_id| {
+        const mask = @shlExact(@as(ClassBitboard, 1), @intCast(class_id));
+        if (ts.bitboard & mask != 0) {
+            outp[i] = @intCast(class_id);
+            i += 1;
+            if (i >= outp.len) break;
+        }
+    }
+
+    return outp;
+}
+pub fn fromClasses(ts_classes: []const ClassId) TimeSlot {
+    var bitboard: ClassBitboard = 0;
+    for (ts_classes) |c| {
+        bitboard |= @shlExact(@as(ClassBitboard, 1), c);
+    }
+    return .{ .bitboard = bitboard };
+}
+
 /// Generates all possible non-overlapping time slots.
 ///
 /// Asserts `restrictions.classes.len >= restrictions.root_count`.
-///
-/// The time slots themselves have to be freed too!
 ///
 /// TODO: Make multithreaded.
 pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_root: std.Progress.Node) Allocator.Error![]TimeSlot {
@@ -72,40 +110,19 @@ pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_ro
 
     var outp_list: std.ArrayList(TimeSlot) = .empty;
     errdefer outp_list.deinit(gpa);
-    errdefer {
-        for (outp_list.items) |item| {
-            gpa.free(item.classes);
-        }
-    }
 
-    const indecies = try gpa.alloc(ClassId, restrictions.room_count);
-    defer gpa.free(indecies);
-    for (indecies, 0..) |*idx, i| {
+    const ts_classes = try gpa.alloc(ClassId, restrictions.room_count);
+    defer gpa.free(ts_classes);
+    for (ts_classes, 0..) |*idx, i| {
         idx.* = @intCast(i);
     }
 
-    while (true) : (if (!increaseIndecies(indecies, @intCast(restrictions.classes.len))) break) {
+    while (true) : (if (!increaseIndecies(ts_classes, @intCast(restrictions.classes.len))) break) {
         defer progress_tested.completeOne();
 
-        const pseudo_time_slot: TimeSlot = .{
-            .classes = indecies,
-            .classes_bitboard = undefined, // Bitboard not important for `hasMandatoryOverlap`.
-        };
-        if (pseudo_time_slot.hasMandatoryOverlap(restrictions)) {
-            continue;
-        }
+        if (classesHasMandatoryOverlap(ts_classes, restrictions)) continue;
 
-        const time_slot: TimeSlot = .{
-            .classes = try gpa.dupe(ClassId, indecies),
-            .classes_bitboard = blk: {
-                var o: ClassBitboard = 0;
-                for (indecies) |i| {
-                    o |= @shlExact(@as(ClassBitboard, 1), i);
-                }
-                break :blk o;
-            },
-        };
-        errdefer gpa.free(time_slot.classes);
+        const time_slot: TimeSlot = .fromClasses(ts_classes);
         try outp_list.append(gpa, time_slot);
 
         progress_valid.completeOne();

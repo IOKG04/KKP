@@ -58,17 +58,12 @@ pub fn main() !void {
     };
 
     const time_slots = try TimeSlot.generateTimeSlots(gpa, restrictions, progress_root);
-    defer {
-        for (time_slots) |ts| {
-            gpa.free(ts.classes);
-        }
-        gpa.free(time_slots);
-    }
+    defer gpa.free(time_slots);
 
     const unfiltered_plans = try Plan.generatePlans(gpa, restrictions, time_slots, progress_root);
     defer {
         for (unfiltered_plans) |plan| {
-            plan.free(gpa);
+            gpa.free(plan.time_slots);
         }
         gpa.free(unfiltered_plans);
     }
@@ -80,7 +75,9 @@ pub fn main() !void {
     for (unfiltered_plans) |plan| {
         for (plan.time_slots) |ts| {
             try stdout.print("{{ ", .{});
-            for (ts.classes) |class_id| {
+            const ts_classes = try ts.classes(gpa);
+            defer gpa.free(ts_classes);
+            for (ts_classes) |class_id| {
                 const class_name = restrictions.classes[class_id].name;
                 try stdout.print("{s} ", .{ class_name });
             }

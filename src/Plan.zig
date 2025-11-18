@@ -23,7 +23,7 @@ pub fn classOverlap(plan: Plan) ClassBitboard {
     var outp: ClassBitboard = 0;
     for (plan.time_slots, 0..) |ts_0, i| {
         for (plan.time_slots[(i + 1)..]) |ts_1| {
-            outp |= ts_0.classes_bitboard & ts_1.classes_bitboard;
+            outp |= ts_0.bitboard & ts_1.bitboard;
         }
     }
     return outp;
@@ -57,16 +57,14 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
     const progress_valid = progress_generate_plans.start("Valid combinations found", 0);
     defer progress_valid.end();
 
-    // This one copies `time_slots`.
     var outp: std.ArrayList(Plan) = .empty;
     errdefer {
         for (outp.items) |plan| {
-            plan.free(gpa);
+            gpa.free(plan.time_slots);
         }
         outp.deinit(gpa);
     }
 
-    // This one uses `time_slots`.
     var inbetweens = try std.ArrayList(Plan).initCapacity(gpa, time_slots.len);
     defer {
         for (inbetweens.items) |plan| {
@@ -84,31 +82,18 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
     while (inbetweens.pop()) |current_branch| {
         defer progress_tested.completeOne();
 
-        const has_remaining_classes = additional_time_slot == 1 and current_branch.time_slots.len == full_time_slots + additional_time_slot;
-
         if (current_branch.hasClassOverlap()) {
-            if (has_remaining_classes) gpa.free(current_branch.time_slots[current_branch.time_slots.len - 1].classes);
             gpa.free(current_branch.time_slots);
             continue;
         }
 
         if (current_branch.time_slots.len == full_time_slots + additional_time_slot) {
-            defer {
-                if (has_remaining_classes) gpa.free(current_branch.time_slots[current_branch.time_slots.len - 1].classes);
-                gpa.free(current_branch.time_slots);
-            }
+            defer gpa.free(current_branch.time_slots);
 
             const plan_as_time_slots = try gpa.alloc(TimeSlot, current_branch.time_slots.len);
             errdefer gpa.free(plan_as_time_slots);
-            var done: usize = 0;
-            errdefer for (plan_as_time_slots[0..done]) |ts| {
-                gpa.free(ts.classes);
-            };
             for (plan_as_time_slots, current_branch.time_slots) |*new, current| {
-                new.classes_bitboard = current.classes_bitboard;
-                new.classes = try gpa.dupe(ClassId, current.classes);
-                errdefer gpa.free(new.classes);
-                done += 1;
+                new.bitboard = current.bitboard;
             }
 
             try outp.append(gpa, .{ .time_slots = plan_as_time_slots });
@@ -124,29 +109,14 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
             const covered_bitboard: ClassBitboard = blk: {
                 var o: ClassBitboard = 0;
                 for (current_branch.time_slots) |ts| {
-                    o |= ts.classes_bitboard;
+                    o |= ts.bitboard;
                 }
                 break :blk o;
             };
             const needed_bitboard = (~covered_bitboard) & (@as(ClassBitboard, std.math.maxInt(ClassBitboard)) >> @intCast(options.class_limit - restrictions.classes.len));
             assert(@popCount(needed_bitboard) == remaining_classes);
 
-            const needed_classes = try gpa.alloc(ClassId, remaining_classes);
-            errdefer gpa.free(needed_classes);
-            var insert_i: usize = 0;
-            for (0..options.class_limit) |class_id| {
-                const mask = @shlExact(@as(ClassBitboard, 1), @intCast(class_id));
-                if (needed_bitboard & mask != 0) {
-                    needed_classes[insert_i] = @intCast(class_id);
-                    insert_i += 1;
-                    if (insert_i >= needed_classes.len) break;
-                }
-            }
-
-            const needed: TimeSlot = .{
-                .classes = needed_classes,
-                .classes_bitboard = needed_bitboard,
-            };
+            const needed: TimeSlot = .{ .bitboard = needed_bitboard };
 
             if (needed.hasMandatoryOverlap(restrictions)) continue;
 
@@ -171,11 +141,4 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
     }
 
     return try outp.toOwnedSlice(gpa);
-}
-
-pub fn free(p: Plan, gpa: Allocator) void {
-    for (p.time_slots) |ts| {
-        gpa.free(ts.classes);
-    }
-    gpa.free(p.time_slots);
 }
