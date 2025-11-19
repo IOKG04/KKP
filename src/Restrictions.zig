@@ -38,6 +38,7 @@ pub fn fromInput(gpa: Allocator, input: Input) Allocator.Error!Restrictions {
     for (input.not_available) |t_inp| {
         if (teacher_table.get(t_inp)) |_| {
             @branchHint(.unlikely); // Considering this is first and we expect the user to not do duplicates, this is quite unlikely.
+                                    // TODO: Performance test replacing this with `.cold`.
         } else {
             // TODO: We might not even have to add them to the table.
             try teacher_table.put(gpa, t_inp, teacher_i);

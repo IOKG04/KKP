@@ -84,6 +84,10 @@ pub fn fromClasses(ts_classes: []const ClassId) TimeSlot {
     return .{ .bitboard = bitboard };
 }
 
+pub fn eql(a: TimeSlot, b: TimeSlot) bool {
+    return a.bitboard == b.bitboard;
+}
+
 /// Generates all possible non-overlapping time slots.
 ///
 /// Asserts `restrictions.classes.len >= restrictions.root_count`.
@@ -142,7 +146,7 @@ fn increaseIndecies(indecies: []ClassId, max: ClassIdCeil) bool {
 
         const actual_max = if (i + 1 >= indecies.len) max else indecies[i + 1];
         if (indecies[i] < actual_max) {
-            @branchHint(.likely);
+            @branchHint(.likely); // TODO: Performance test this.
             return true;
         }
 

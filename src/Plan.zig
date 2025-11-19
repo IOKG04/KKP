@@ -33,13 +33,28 @@ pub fn hasClassOverlap(plan: Plan) bool {
     return plan.classOverlap() != 0;
 }
 
+/// Returns `true` iff `a` and `b` are the same plan except for
+/// the time slots being in a different order.
+///
+/// Assumes no time slot in `a` or `b` repeats.
+pub fn isShuffle(a: Plan, b: Plan) bool {
+    if (a.time_slots.len != b.time_slots.len) return false;
+
+    a_loop: for (a.time_slots) |a_ts| {
+        for (b.time_slots) |b_ts| {
+            if (a_ts.eql(b_ts)) continue :a_loop;
+        }
+        return false;
+    }
+    return true;
+}
+
 /// Generates all possible plans without a repeating class.
 ///
 /// Asserts that all classes can be covered within the number
 /// of time slots and rooms.
 ///
-/// The plans themselves and the time slots they contain have
-/// to be freed too!
+/// The plans themselves have to be freed too!
 ///
 /// TODO: Make multithreaded.
 pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []const TimeSlot, progress_root: std.Progress.Node) Allocator.Error![]Plan {

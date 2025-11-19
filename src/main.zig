@@ -7,6 +7,8 @@ const Restrictions = @import("Restrictions.zig");
 const Plan = @import("Plan.zig");
 const TimeSlot = @import("TimeSlot.zig");
 
+const Allocator = std.mem.Allocator;
+
 pub fn main() !void {
     const using_dbg_allocator = builtin.mode != .ReleaseFast;
     var dbg_allocator = if (using_dbg_allocator) std.heap.DebugAllocator(.{}).init else {};
@@ -70,23 +72,78 @@ pub fn main() !void {
         gpa.free(unfiltered_plans);
     }
 
-    // TODO: Filter plans
+    const filtered_plans = try filterPlans(gpa, unfiltered_plans, progress_root);
+    defer {
+        for (filtered_plans) |plan| {
+            gpa.free(plan.time_slots);
+        }
+        gpa.free(filtered_plans);
+    }
 
     progress_root.end();
 
-    for (unfiltered_plans) |plan| {
+    for (filtered_plans) |plan| {
         for (plan.time_slots) |ts| {
             try stdout.print("{{ ", .{});
             const ts_classes = try ts.classes(gpa);
             defer gpa.free(ts_classes);
             for (ts_classes) |class_id| {
                 const class_name = restrictions.classes[class_id].name;
-                try stdout.print("{s} ", .{ class_name });
+                try stdout.print("{s} ", .{class_name});
             }
             try stdout.print("}}\n", .{});
         }
         try stdout.print("\n", .{});
     }
     try stdout.print("Found {d} plans in total.\n", .{unfiltered_plans.len});
+    try stdout.print("Found {d} plans after filtering.\n", .{filtered_plans.len});
     try stdout.flush();
+}
+
+/// Returns `plans` but with all duplicates
+/// (only order shuffled) removed.
+///
+/// The plans themselves have to be freed too!
+///
+/// TODO: Make multithreaded.
+/// TODO: Move to some other file probably.
+fn filterPlans(gpa: Allocator, plans: []const Plan, progress_root: std.Progress.Node) Allocator.Error![]Plan {
+    const progress_filter_plans = progress_root.start("Filter generated plans", 0);
+    defer progress_filter_plans.end();
+    const progress_tested = progress_filter_plans.start("Plans tested", plans.len);
+    defer progress_tested.end();
+    const progress_valid = progress_filter_plans.start("Non-duplicated plans found", 0);
+    defer progress_valid.end();
+
+    var outp = try std.ArrayList(Plan).initCapacity(gpa, 1);
+    errdefer {
+        for (outp.items) |plan| {
+            gpa.free(plan.time_slots);
+        }
+        outp.deinit(gpa);
+    }
+
+    {
+        const time_slots = try gpa.dupe(TimeSlot, plans[0].time_slots);
+        errdefer gpa.free(time_slots);
+        outp.appendAssumeCapacity(.{ .time_slots = time_slots });
+
+        progress_tested.completeOne();
+        progress_valid.completeOne();
+    }
+
+    inp_loop: for (plans[1..]) |plan_inp| {
+        defer progress_tested.completeOne();
+
+        for (outp.items) |plan_no_dupe| {
+            if (plan_inp.isShuffle(plan_no_dupe)) continue :inp_loop;
+        }
+
+        const time_slots = try gpa.dupe(TimeSlot, plan_inp.time_slots);
+        errdefer gpa.free(time_slots);
+        try outp.append(gpa, .{ .time_slots = time_slots });
+        progress_valid.completeOne();
+    }
+
+    return try outp.toOwnedSlice(gpa);
 }
