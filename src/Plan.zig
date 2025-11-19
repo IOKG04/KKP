@@ -12,8 +12,11 @@ const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 const ClassBitboard = TimeSlot.ClassBitboard;
 const ClassId = TimeSlot.ClassId;
+const Writer = std.Io.Writer;
 
 const Plan = @This();
+
+pub const utils = @import("Plan/utils.zig");
 
 /// Length guarantied to be <= `associated_restrictions.time_slots`.
 /// Time slots should be correct (have no mandatory overlap).
@@ -156,4 +159,31 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
     }
 
     return try outp.toOwnedSlice(gpa);
+}
+
+/// Asserts `restrictions.room_count <= options.class_limit`.
+///
+/// TODO: Make this better somehow.
+pub fn format(plan: Plan, restrictions: Restrictions, w: *Writer) Writer.Error!void {
+    // Create an FBA to circumvent having to pass a gpa.
+    // With default settings, this is gonna be around
+    // 256 bytes extra on the stack.
+    assert(restrictions.room_count <= options.class_limit);
+    var buf: [options.class_limit * @sizeOf(ClassId)]u8 = undefined;
+    var buffer_allocator = std.heap.FixedBufferAllocator.init(&buf);
+    const arena = buffer_allocator.allocator();
+
+    for (plan.time_slots) |ts| {
+        try w.print("{{ ", .{});
+
+        const ts_classes = ts.classes(arena) catch unreachable;
+        defer buffer_allocator.reset();
+
+        for (ts_classes) |class_id| {
+            const class_name = restrictions.classes[class_id].name;
+            try w.print("{s} ", .{class_name});
+        }
+
+        try w.print("}}\n", .{});
+    }
 }

@@ -10,8 +10,8 @@ input: []const u8,
 /// `.len == 0` implies no output.
 output: ?[]const u8,
 
-/// Number of concurrent jobs.
-jobs: usize,
+///// Number of concurrent jobs.
+//jobs: usize,
 
 /// Whether to print stuff.
 /// (doesn't diable errors and program output)
@@ -23,7 +23,7 @@ pub fn parse(args: []const []const u8, stdout: *std.Io.Writer) ParseError!CliOpt
     var outp: CliOptions = .{
         .input = undefined,
         .output = null,
-        .jobs = @max(1, std.Thread.getCpuCount() catch 1),
+//        .jobs = @max(1, std.Thread.getCpuCount() catch 1),
         .quiet = false,
     };
     var input_set = false;
