@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const options = @import("options");
 
 const CliOptions = @import("CliOptions.zig");
 const Input = @import("Input.zig");
@@ -60,6 +61,24 @@ pub fn main() !void {
         break :blk r;
     };
     defer restrictions.free(gpa);
+
+    if (restrictions.room_count > options.class_limit) {
+        @branchHint(.cold);
+        try stdout.print("Error: Input's room_count ({d}) exceeds class limit ({d})\n", .{ restrictions.room_count, options.class_limit });
+        try stdout.flush();
+        return error.InvalidInput;
+    }
+    if (restrictions.classes.len > restrictions.room_count * restrictions.time_slots) {
+        @branchHint(.cold);
+        try stdout.print("Error: Input's class count ({d}) exceeds maximum possible covered classes ({d} * {d} = {d})\n", .{
+            restrictions.classes.len,
+            restrictions.room_count,
+            restrictions.time_slots,
+            restrictions.room_count * restrictions.time_slots,
+        });
+        try stdout.flush();
+        return error.InvalidInput;
+    }
 
     const time_slots = try TimeSlot.generateTimeSlots(gpa, restrictions, progress_root);
     defer gpa.free(time_slots);
