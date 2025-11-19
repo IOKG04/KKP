@@ -5,10 +5,44 @@ You tell it which classes exist, which teachers do each class,
 how many conferences can happen at any time and how many time
 slots you have, and it tells you the possible arrangements.
 
-Due to some optimizations being used here, only 255 teachers
+BUILDING
+
+To build KKP/CCP, you need to have the zig compiler version
+0.15.2 installed. You can get it here: ziglang.org.
+After that, simply run `zig build` and it'll build it. The
+binary should be installed at `zig-out/bin/KKP`.
+
+This will be a debug build. If you want performance, run
+`zig build -Doptimize=ReleaseFast` instead.
+
+USING
+
+KKP/CCP takes a zon file as its input. Two examples can be
+found in this repository, though to explain the schema:
+
+The two most important fields are `room_count` and `time_slots`,
+which dictate how many conferences can be held concurrently
+and how many sequencially.
+`not_available` contains a list of teachers that can be
+ignored in the search because they can't participate anyway.
+Lastly, `classes` is a list of classes, each with a name and
+a mandatory and optional teachers list.
+
+Currently, this program doesn't use the optional list.
+
+Due to some optimizations being used, only 255 teachers
 can be at the school. If that limit needs to be increased,
 pass `-Dteacher_limit=NUM` to `zig build`.
 Same goes for the amount of classes, limited to 63. This can
 be changed with `-Dclass_limit=NUM`.
 
-// TODO: Make more documentation.
+WARNING
+
+This software is still in its infancy. Do not use this for
+mission-critical applications.
+
+TODO
+
+- Improve performance by multithreading and whatever.
+- Add code to handle optional teachers.
+- Make better formatting for the output.
