@@ -4,9 +4,12 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const build_zig_zon = @import("build.zig.zon");
+
     const options = b.addOptions();
     options.addOption(u16, "teacher_limit", b.option(u16, "teacher_limit", "Maximum amount of teachers that can be handled") orelse 255);
     options.addOption(u16, "class_limit", b.option(u16, "class_limit", "Maximum amount of classes that can be handled") orelse 63);
+    options.addOption(std.SemanticVersion, "version", std.SemanticVersion.parse(build_zig_zon.version) catch @panic("WTF?"));
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),

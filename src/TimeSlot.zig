@@ -50,6 +50,8 @@ pub fn mandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) TeacherBitboar
     return classesMandatoryOverlap(ts_classes, restrictions);
 }
 /// Returns `true` iff one or more teachers are mandatory twice or more.
+///
+/// Asserts `restrictions.room_count <= options.class_limit`.
 pub fn hasMandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) bool {
     return ts.mandatoryOverlap(restrictions) != 0;
 }

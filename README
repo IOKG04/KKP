@@ -11,8 +11,4 @@ pass `-Dteacher_limit=NUM` to `zig build`.
 Same goes for the amount of classes, limited to 63. This can
 be changed with `-Dclass_limit=NUM`.
 
-Currently, even though a `-j` option is provided, this isn't
-multithreaded. I might optimize in the future though.
-
 // TODO: Make more documentation.
-// TODO: Add some license.
