@@ -12,7 +12,7 @@ const Restrictions = @import("Restrictions.zig");
 
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
-const TeacherBitboard = Restrictions.TeacherBitboard;
+const TeacherBitboard = Restrictions.Class.TeacherBitboard;
 
 const TimeSlot = @This();
 
@@ -28,7 +28,7 @@ fn classesMandatoryOverlap(ts_classes: []const ClassId, restrictions: Restrictio
         const class_0 = restrictions.classes[ci_0];
         for (ts_classes[(i + 1)..]) |ci_1| {
             const class_1 = restrictions.classes[ci_1];
-            outp |= class_0.mandatory_bitboard & class_1.mandatory_bitboard;
+            outp |= class_0.intersection(class_1).mandatory;
         }
     }
     return outp;
@@ -36,22 +36,20 @@ fn classesMandatoryOverlap(ts_classes: []const ClassId, restrictions: Restrictio
 fn classesHasMandatoryOverlap(ts_classes: []const ClassId, restrictions: Restrictions) bool {
     return classesMandatoryOverlap(ts_classes, restrictions) != 0;
 }
-/// Asserts `restrictions.room_count <= options.class_limit`.
 pub fn mandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) TeacherBitboard {
     // Create an FBA to circumvent having to pass a gpa.
     // With default settings, this is gonna be around
     // 256 bytes extra on the stack.
-    assert(restrictions.room_count <= options.class_limit);
     var buf: [options.class_limit * @sizeOf(ClassId)]u8 = undefined;
     var buffer_allocator = std.heap.FixedBufferAllocator.init(&buf);
     const arena = buffer_allocator.allocator();
 
-    const ts_classes = ts.classes(arena) catch unreachable;
+    const ts_classes = ts.classes(arena) catch |err| switch (err) {
+        error.OutOfMemory => unreachable,
+    };
     return classesMandatoryOverlap(ts_classes, restrictions);
 }
 /// Returns `true` iff one or more teachers are mandatory twice or more.
-///
-/// Asserts `restrictions.room_count <= options.class_limit`.
 pub fn hasMandatoryOverlap(ts: TimeSlot, restrictions: Restrictions) bool {
     return ts.mandatoryOverlap(restrictions) != 0;
 }
@@ -61,22 +59,24 @@ pub fn classesLength(ts: TimeSlot) usize {
 }
 /// Indexes into `associated_restrictions.classes`.
 ///
-/// Guarantied to be < `options.class_limit`.
+/// Asserts `ts` has a length of at least 1.
+///
+/// Uses at most `options.class_limit * @sizeOf(ClassId)` bytes.
 pub fn classes(ts: TimeSlot, gpa: Allocator) Allocator.Error![]ClassId {
     const outp = try gpa.alloc(ClassId, ts.classesLength());
     errdefer gpa.free(outp);
 
+    assert(outp.len > 0);
     var i: usize = 0;
     for (0..options.class_limit) |class_id| {
         const mask = @shlExact(@as(ClassBitboard, 1), @intCast(class_id));
         if (ts.bitboard & mask != 0) {
             outp[i] = @intCast(class_id);
             i += 1;
-            if (i >= outp.len) break;
+            if (i >= outp.len) return outp;
         }
     }
-
-    return outp;
+    unreachable;
 }
 pub fn fromClasses(ts_classes: []const ClassId) TimeSlot {
     var bitboard: ClassBitboard = 0;

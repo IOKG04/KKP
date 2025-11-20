@@ -9,6 +9,8 @@ const Allocator = std.mem.Allocator;
 
 const Restrictions = @This();
 
+pub const Class = @import("Restrictions/Class.zig");
+
 /// Amount of conferences that can happen
 /// concurrently at any one time.
 room_count: u16,
@@ -20,15 +22,8 @@ classes: []const Class,
 
 teacher_table: []const []const u8,
 
-pub const TeacherBitboard = std.meta.Int(.unsigned, options.teacher_limit);
-pub const TeacherId = std.math.Log2Int(TeacherBitboard);
-pub const Class = struct {
-    name: []const u8,
-    /// TODO: Function to turn this into an array.
-    optional_bitboard: TeacherBitboard,
-    /// TODO: Function to turn this into an array.
-    mandatory_bitboard: TeacherBitboard,
-};
+const TeacherBitboard = Class.TeacherBitboard;
+const TeacherId = Class.TeacherId;
 
 pub fn fromInput(gpa: Allocator, input: Input) Allocator.Error!Restrictions {
     var teacher_table: std.StringHashMapUnmanaged(TeacherId) = .empty;
@@ -77,7 +72,7 @@ pub fn fromInput(gpa: Allocator, input: Input) Allocator.Error!Restrictions {
         for (class_inp.optional) |t_inp| {
             if (teacher_table.get(t_inp)) |id| {
                 if (id >= not_available_cutoff) {
-                    class_out.optional_bitboard |= @shlExact(@as(TeacherBitboard, 1), teacher_i);
+                    class_out.optional_bitboard |= @shlExact(@as(TeacherBitboard, 1), id);
                 }
             } else {
                 class_out.optional_bitboard |= @shlExact(@as(TeacherBitboard, 1), teacher_i);

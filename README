@@ -44,7 +44,6 @@ mission-critical applications.
 TODO
 
 - Improve performance by multithreading and whatever.
-- Add code to handle optional teachers.
 - Make better formatting for the output.
 - Handling such that if more time slots than needed are
   available, and that if with just the strictly needed
