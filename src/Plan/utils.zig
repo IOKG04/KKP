@@ -1,9 +1,11 @@
 const std = @import("std");
 
 const Plan = @import("../Plan.zig");
+const Restrictions = @import("../Restrictions.zig");
 const TimeSlot = @import("../TimeSlot.zig");
 
 const Allocator = std.mem.Allocator;
+const Writer = std.Io.Writer;
 
 /// Returns `plans` but with all duplicates
 /// (only order shuffled) removed.
@@ -50,4 +52,11 @@ pub fn filter(gpa: Allocator, plans: []const Plan, progress_root: std.Progress.N
     }
 
     return try outp.toOwnedSlice(gpa);
+}
+
+pub fn print(plans: []const Plan, restrictions: Restrictions, w: *Writer) Writer.Error!void {
+    for (plans) |plan| {
+        try plan.format(restrictions, w);
+        try w.print("\n", .{});
+    }
 }

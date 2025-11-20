@@ -62,9 +62,21 @@ pub fn main() !void {
     };
     defer restrictions.free(gpa);
 
+    if (restrictions.room_count == 0) {
+        @branchHint(.cold);
+        try stdout.print("Error: Input's room count is 0\n", .{});
+        try stdout.flush();
+        return error.InvalidInput;
+    }
+    if (restrictions.time_slots == 0) {
+        @branchHint(.cold);
+        try stdout.print("Error: Input's time slots is 0\n", .{});
+        try stdout.flush();
+        return error.InvalidInput;
+    }
     if (restrictions.room_count > options.class_limit) {
         @branchHint(.cold);
-        try stdout.print("Error: Input's room_count ({d}) exceeds class limit ({d})\n", .{ restrictions.room_count, options.class_limit });
+        try stdout.print("Error: Input's room count ({d}) exceeds class limit ({d})\n", .{ restrictions.room_count, options.class_limit });
         try stdout.flush();
         return error.InvalidInput;
     }
@@ -102,12 +114,7 @@ pub fn main() !void {
     progress_root.end();
 
     if (cli_options.output == null) { // Output to stdout.
-        for (filtered_plans) |plan| {
-            try plan.format(restrictions, stdout);
-            try stdout.print("\n", .{});
-        }
-        try stdout.print("Found {d} plans in total.\n", .{unfiltered_plans.len});
-        try stdout.print("Found {d} plans after filtering.\n", .{filtered_plans.len});
+        try Plan.utils.print(filtered_plans, restrictions, stdout);
         try stdout.flush();
     } else if (cli_options.output.?.len > 0) { // Output to file.
         const path = cli_options.output.?;
@@ -117,15 +124,15 @@ pub fn main() !void {
         var file_writer = file.writer(&file_buffer);
         const writer = &file_writer.interface;
 
-        for (filtered_plans) |plan| {
-            try plan.format(restrictions, writer);
-            try writer.print("\n", .{});
-        }
-        try stdout.print("Found {d} plans in total.\n", .{unfiltered_plans.len});
-        try stdout.print("Found {d} plans after filtering.\n", .{filtered_plans.len});
+        try Plan.utils.print(filtered_plans, restrictions, writer);
         try writer.flush();
 
         try file_writer.end();
     }
 
+    if (!cli_options.quiet) {
+        try stdout.print("Found {d} plans in total.\n", .{unfiltered_plans.len});
+        try stdout.print("Found {d} plans after filtering.\n", .{filtered_plans.len});
+        try stdout.flush();
+    }
 }
