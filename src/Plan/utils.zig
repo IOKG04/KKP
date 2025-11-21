@@ -11,8 +11,6 @@ const Writer = std.Io.Writer;
 /// (only order shuffled) removed.
 ///
 /// The plans themselves have to be freed too!
-///
-/// TODO: Make multithreaded.
 pub fn filter(gpa: Allocator, plans: []const Plan, progress_root: std.Progress.Node) Allocator.Error![]Plan {
     const progress_filter_plans = progress_root.start("Filter generated plans", 0);
     defer progress_filter_plans.end();

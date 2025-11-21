@@ -93,8 +93,6 @@ pub fn eql(a: TimeSlot, b: TimeSlot) bool {
 /// Generates all possible non-overlapping time slots.
 ///
 /// Asserts `restrictions.classes.len >= restrictions.root_count`.
-///
-/// TODO: Make multithreaded.
 pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_root: std.Progress.Node) Allocator.Error![]TimeSlot {
     const combinations: usize = blk: { // n choose k
         const n = restrictions.classes.len;

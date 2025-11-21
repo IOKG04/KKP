@@ -58,8 +58,6 @@ pub fn isShuffle(a: Plan, b: Plan) bool {
 /// of time slots and rooms.
 ///
 /// The plans themselves have to be freed too!
-///
-/// TODO: Make multithreaded.
 pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []const TimeSlot, progress_root: std.Progress.Node) Allocator.Error![]Plan {
     assert(restrictions.classes.len <= restrictions.room_count * restrictions.time_slots);
 
