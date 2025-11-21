@@ -159,9 +159,9 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
             progress_tested.increaseEstimatedTotalItems(1);
             try inbetweenss.append(gpa, inbetweens);
         } else {
-            progress_tested.increaseEstimatedTotalItems(time_slots.len);
-
-            for (0..time_slots.len) |idx| {
+            const min = current_branch[current_branch.len - 1].idx; // Haven't tested all that much if this might stop it from finding some possibilities, if it does, `ed5f` was the last commit without this.
+            progress_tested.increaseEstimatedTotalItems(time_slots.len - min);
+            for (min..time_slots.len) |idx| {
                 const inbetweens = try gpa.alloc(Inbetween, current_branch.len + 1);
                 errdefer gpa.free(inbetweens);
                 @memcpy(inbetweens[0..current_branch.len], current_branch);
