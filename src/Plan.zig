@@ -83,35 +83,50 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
         outp.deinit(gpa);
     }
 
-    var inbetweens = try std.ArrayList(Plan).initCapacity(gpa, time_slots.len);
+    const Inbetween = union (enum) {
+        /// Index into `time_slots`.
+        idx: usize,
+        time_slot: TimeSlot,
+        pub fn read(i: @This(), tss: []const TimeSlot) TimeSlot {
+            return switch (i) {
+                .idx => |idx| tss[idx],
+                .time_slot => |ts| ts,
+            };
+        }
+    };
+
+    var inbetweenss = try std.ArrayList([]Inbetween).initCapacity(gpa, time_slots.len);
     defer {
-        for (inbetweens.items) |plan| {
-            gpa.free(plan.time_slots);
+        for (inbetweenss.items) |inbetweens| {
+            gpa.free(inbetweens);
         }
-        inbetweens.deinit(gpa);
+        inbetweenss.deinit(gpa);
     }
-    for (time_slots) |ts| {
-        const plan_as_time_slots = try gpa.alloc(TimeSlot, 1);
-        errdefer gpa.free(plan_as_time_slots);
-        plan_as_time_slots[0] = ts;
-        inbetweens.appendAssumeCapacity(.{ .time_slots = plan_as_time_slots });
+    for (0..time_slots.len) |idx| {
+        const inbetweens = try gpa.alloc(Inbetween, 1);
+        errdefer gpa.free(inbetweens);
+        inbetweens[0] = .{ .idx = idx };
+        inbetweenss.appendAssumeCapacity(inbetweens);
     }
 
-    while (inbetweens.pop()) |current_branch| {
+    while (inbetweenss.pop()) |current_branch| {
         defer progress_tested.completeOne();
+        defer gpa.free(current_branch);
 
-        if (current_branch.hasClassOverlap()) {
-            gpa.free(current_branch.time_slots);
-            continue;
-        }
+        if (has_class_overlap: {
+            for (current_branch, 0..) |inbetween_0, i| {
+                for (current_branch[(i + 1)..]) |inbetween_1| {
+                    if (inbetween_0.read(time_slots).bitboard & inbetween_1.read(time_slots).bitboard != 0) break :has_class_overlap true;
+                }
+            }
+            break :has_class_overlap false;
+        }) continue;
 
-        if (current_branch.time_slots.len == full_time_slots + additional_time_slot) {
-            defer gpa.free(current_branch.time_slots);
-
-            const plan_as_time_slots = try gpa.alloc(TimeSlot, current_branch.time_slots.len);
+        if (current_branch.len == full_time_slots + additional_time_slot) {
+            const plan_as_time_slots = try gpa.alloc(TimeSlot, current_branch.len);
             errdefer gpa.free(plan_as_time_slots);
-            for (plan_as_time_slots, current_branch.time_slots) |*new, current| {
-                new.bitboard = current.bitboard;
+            for (plan_as_time_slots, current_branch) |*new, current| {
+                new.* = current.read(time_slots);
             }
 
             try outp.append(gpa, .{ .time_slots = plan_as_time_slots });
@@ -119,15 +134,13 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
             continue;
         }
 
-        defer gpa.free(current_branch.time_slots);
-
-        if (additional_time_slot == 1 and current_branch.time_slots.len == full_time_slots + additional_time_slot - 1) { // Just need remaining classes.
+        if (additional_time_slot == 1 and current_branch.len == full_time_slots + additional_time_slot - 1) { // Just need remaining classes.
             assert(remaining_classes != 0);
 
             const covered_bitboard: ClassBitboard = blk: {
                 var o: ClassBitboard = 0;
-                for (current_branch.time_slots) |ts| {
-                    o |= ts.bitboard;
+                for (current_branch) |inbetween| {
+                    o |= inbetween.read(time_slots).bitboard;
                 }
                 break :blk o;
             };
@@ -138,22 +151,22 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
 
             if (needed.hasMandatoryOverlap(restrictions)) continue;
 
-            const plan_as_time_slots = try gpa.alloc(TimeSlot, current_branch.time_slots.len + 1);
-            errdefer gpa.free(plan_as_time_slots);
-            @memcpy(plan_as_time_slots[0..current_branch.time_slots.len], current_branch.time_slots);
-            plan_as_time_slots[current_branch.time_slots.len] = needed;
+            const inbetweens = try gpa.alloc(Inbetween, current_branch.len + 1);
+            errdefer gpa.free(inbetweens);
+            @memcpy(inbetweens[0..current_branch.len], current_branch);
+            inbetweens[current_branch.len] = .{ .time_slot = needed };
 
             progress_tested.increaseEstimatedTotalItems(1);
-            try inbetweens.append(gpa, .{ .time_slots = plan_as_time_slots });
+            try inbetweenss.append(gpa, inbetweens);
         } else {
             progress_tested.increaseEstimatedTotalItems(time_slots.len);
 
-            for (time_slots) |ts| {
-                const plan_as_time_slots = try gpa.alloc(TimeSlot, current_branch.time_slots.len + 1);
-                errdefer gpa.free(plan_as_time_slots);
-                @memcpy(plan_as_time_slots[0..current_branch.time_slots.len], current_branch.time_slots);
-                plan_as_time_slots[current_branch.time_slots.len] = ts;
-                try inbetweens.append(gpa, .{ .time_slots = plan_as_time_slots });
+            for (0..time_slots.len) |idx| {
+                const inbetweens = try gpa.alloc(Inbetween, current_branch.len + 1);
+                errdefer gpa.free(inbetweens);
+                @memcpy(inbetweens[0..current_branch.len], current_branch);
+                inbetweens[current_branch.len] = .{ .idx = idx };
+                try inbetweenss.append(gpa, inbetweens);
             }
         }
     }
