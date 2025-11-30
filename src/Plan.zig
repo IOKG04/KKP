@@ -56,7 +56,7 @@ pub fn isShuffle(a: Plan, b: Plan) bool {
 /// of time slots and rooms.
 ///
 /// The plans themselves have to be freed too!
-pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []const TimeSlot, progress_root: std.Progress.Node) Allocator.Error![]Plan {
+pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []const TimeSlot, progress_root: ?std.Progress.Node) Allocator.Error![]Plan {
     assert(restrictions.classes.len <= restrictions.room_count * restrictions.time_slots);
 
     const full_time_slots = restrictions.classes.len / restrictions.room_count;
@@ -64,12 +64,12 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
     const additional_time_slot = @intFromBool(remaining_classes != 0);
     assert(full_time_slots * restrictions.room_count + remaining_classes == restrictions.classes.len);
 
-    const progress_generate_plans = progress_root.start("Generate possible plans", 0);
-    defer progress_generate_plans.end();
-    const progress_tested = progress_generate_plans.start("Branches tested", time_slots.len);
-    defer progress_tested.end();
-    const progress_valid = progress_generate_plans.start("Valid combinations found", 0);
-    defer progress_valid.end();
+    const progress_generate_plans = if (progress_root) |progress| progress.start("Generate possible plans", 0) else null;
+    defer if (progress_generate_plans) |progress| progress.end();
+    const progress_tested = if (progress_generate_plans) |progress| progress.start("Branches tested", time_slots.len) else null;
+    defer if (progress_tested) |progress| progress.end();
+    const progress_valid = if (progress_generate_plans) |progress| progress.start("Valid combinations found", 0) else null;
+    defer if (progress_valid) |progress| progress.end();
 
     var outp: std.ArrayList(Plan) = .empty;
     errdefer {
@@ -106,7 +106,7 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
     }
 
     while (inbetweenss.pop()) |current_branch| {
-        defer progress_tested.completeOne();
+        defer if (progress_tested) |progress| progress.completeOne();
         defer gpa.free(current_branch);
 
         if (has_class_overlap: {
@@ -126,7 +126,7 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
             }
 
             try outp.append(gpa, .{ .time_slots = plan_as_time_slots });
-            progress_valid.completeOne();
+            if (progress_valid) |progress| progress.completeOne();
             continue;
         }
 
@@ -152,11 +152,11 @@ pub fn generatePlans(gpa: Allocator, restrictions: Restrictions, time_slots: []c
             @memcpy(inbetweens[0..current_branch.len], current_branch);
             inbetweens[current_branch.len] = .{ .time_slot = needed };
 
-            progress_tested.increaseEstimatedTotalItems(1);
+            if (progress_tested) |progress| progress.increaseEstimatedTotalItems(1);
             try inbetweenss.append(gpa, inbetweens);
         } else {
             const min = current_branch[current_branch.len - 1].idx; // Haven't tested all that much if this might stop it from finding some possibilities, if it does, `ed5f` was the last commit without this.
-            progress_tested.increaseEstimatedTotalItems(time_slots.len - min);
+            if (progress_tested) |progress| progress.increaseEstimatedTotalItems(time_slots.len - min);
             for (min..time_slots.len) |idx| {
                 const inbetweens = try gpa.alloc(Inbetween, current_branch.len + 1);
                 errdefer gpa.free(inbetweens);

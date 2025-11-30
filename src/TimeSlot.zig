@@ -93,7 +93,7 @@ pub fn eql(a: TimeSlot, b: TimeSlot) bool {
 /// Generates all possible non-overlapping time slots.
 ///
 /// Asserts `restrictions.classes.len >= restrictions.root_count`.
-pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_root: std.Progress.Node) Allocator.Error![]TimeSlot {
+pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_root: ?std.Progress.Node) Allocator.Error![]TimeSlot {
     const combinations: usize = blk: { // n choose k
         const n = restrictions.classes.len;
         const k = restrictions.room_count;
@@ -105,12 +105,12 @@ pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_ro
         break :blk o;
     };
 
-    const progress_generate_ts = progress_root.start("Generate possible time slots", 0);
-    defer progress_generate_ts.end();
-    const progress_tested = progress_generate_ts.start("Combinations tested", combinations);
-    defer progress_tested.end();
-    const progress_valid = progress_generate_ts.start("Valid combinations found", 0);
-    defer progress_valid.end();
+    const progress_generate_ts = if (progress_root) |progress| progress.start("Generate possible time slots", 0) else null;
+    defer if (progress_generate_ts) |progress| progress.end();
+    const progress_tested = if (progress_generate_ts) |progress| progress.start("Combinations tested", combinations) else null;
+    defer if (progress_tested) |progress| progress.end();
+    const progress_valid = if (progress_generate_ts) |progress| progress.start("Valid combinations found", 0) else null;
+    defer if (progress_valid) |progress| progress.end();
 
     var outp_list: std.ArrayList(TimeSlot) = .empty;
     errdefer outp_list.deinit(gpa);
@@ -122,14 +122,14 @@ pub fn generateTimeSlots(gpa: Allocator, restrictions: Restrictions, progress_ro
     }
 
     while (true) : (if (!increaseIndecies(ts_classes, @intCast(restrictions.classes.len))) break) {
-        defer progress_tested.completeOne();
+        defer if (progress_tested) |progress| progress.completeOne();
 
         if (classesHasMandatoryOverlap(ts_classes, restrictions)) continue;
 
         const time_slot: TimeSlot = .fromClasses(ts_classes);
         try outp_list.append(gpa, time_slot);
 
-        progress_valid.completeOne();
+        if (progress_valid) |progress| progress.completeOne();
     }
 
     return try outp_list.toOwnedSlice(gpa);

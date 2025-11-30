@@ -31,25 +31,25 @@ pub fn main() !void {
         else => return err,
     };
 
-    const progress_root = std.Progress.start(.{
+    const progress_root = if (!cli_options.quiet) std.Progress.start(.{
         .root_name = "KKP",
         .estimated_total_items = 3, // 1) Parse input
                                     // 2) Combination generation
                                     // 3) Plan generation
-        .disable_printing = cli_options.quiet,
-    });
+        .disable_printing = false,
+    }) else null;
 
     const restrictions: Restrictions = blk: {
-        const progress_parse_input = progress_root.start("Parse input", 2);
-        defer progress_parse_input.end();
+        const progress_parse_input = if (progress_root) |progress| progress.start("Parse input", 2) else null;
+        defer if (progress_parse_input) |progress| progress.end();
 
         const input = try Input.fromFile(gpa, cli_options.input, stdout);
         defer input.deinit(gpa);
-        progress_parse_input.completeOne();
+        if (progress_parse_input) |progress| progress.completeOne();
 
         const r = try Restrictions.fromInput(gpa, input);
         errdefer r.free(gpa);
-        progress_parse_input.completeOne();
+        if (progress_parse_input) |progress| progress.completeOne();
 
         break :blk r;
     };
@@ -96,7 +96,7 @@ pub fn main() !void {
         gpa.free(plans);
     }
 
-    progress_root.end();
+    if (progress_root) |progress| progress.end();
 
     if (cli_options.output == null) { // Output to stdout.
         try printPlans(plans, restrictions, stdout);
