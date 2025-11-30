@@ -4,6 +4,8 @@ const std = @import("std");
 const options = @import("options");
 
 const Input = @import("Input.zig");
+const Plan = @import("Plan.zig");
+const TimeSlot = @import("TimeSlot.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -113,4 +115,20 @@ pub fn free(r: Restrictions, gpa: Allocator) void {
         gpa.free(class.name);
     }
     gpa.free(r.classes);
+}
+
+/// Generates all possible plans given `restrictions`.
+pub fn generatePlans(restrictions: Restrictions, gpa: Allocator, progress_root: ?std.Progress.Node) Allocator.Error![]Plan {
+    const time_slots = try TimeSlot.generateTimeSlots(gpa, restrictions, progress_root);
+    defer gpa.free(time_slots);
+
+    const plans = try Plan.generatePlans(gpa, restrictions, time_slots, progress_root);
+    errdefer {
+        for (plans) |plan| {
+            gpa.free(plan.time_slots);
+        }
+        gpa.free(plans);
+    }
+
+    return plans;
 }

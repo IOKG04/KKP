@@ -6,7 +6,6 @@ const CliOptions = @import("CliOptions.zig");
 const Input = @import("Input.zig");
 const Restrictions = @import("Restrictions.zig");
 const Plan = @import("Plan.zig");
-const TimeSlot = @import("TimeSlot.zig");
 
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
@@ -85,10 +84,7 @@ pub fn main() !void {
         return error.InvalidInput;
     }
 
-    const time_slots = try TimeSlot.generateTimeSlots(gpa, restrictions, progress_root);
-    defer gpa.free(time_slots);
-
-    const plans = try Plan.generatePlans(gpa, restrictions, time_slots, progress_root);
+    const plans = try restrictions.generatePlans(gpa, progress_root);
     defer {
         for (plans) |plan| {
             gpa.free(plan.time_slots);
