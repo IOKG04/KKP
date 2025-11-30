@@ -15,37 +15,6 @@ name: []const u8,
 mandatory_bitboard: TeacherBitboard,
 optional_bitboard: TeacherBitboard,
 
-/// Returns amount of teachers in class.
-///
-/// Asserts no teacher is both optional
-/// and mandatory.
-pub fn Length(c: Class) usize {
-    assert(c.mandatory_bitboard & c.optional_bitboard == 0);
-    return @popCount(c.mandatory_bitboard) + @popCount(c.optional_bitboard);
-}
-
-pub fn mandatoryLength(c: Class) usize {
-    return @popCount(c.mandatory_bitboard);
-}
-/// Uses at most `options.teacher_limit * @sizeOf(TeacherId)` bytes.
-pub fn mandatory(c: Class, gpa: Allocator) Allocator.Error![]TeacherId {
-    const outp = try gpa.alloc(TeacherId, c.mandatoryLength());
-    errdefer gpa.free(outp);
-    getTeachers(c.mandatory_bitboard, outp);
-    return outp;
-}
-
-pub fn optionalLength(c: Class) usize {
-    return @popCount(c.optional_bitboard);
-}
-/// Uses at most `options.teacher_limit * @sizeOf(TeacherId)` bytes.
-pub fn optional(c: Class, gpa: Allocator) Allocator.Error![]TeacherId {
-    const outp = try gpa.alloc(TeacherId, c.optionalLength());
-    errdefer gpa.free(outp);
-    getTeachers(c.optional_bitboard, outp);
-    return outp;
-}
-
 /// Writes directly into `outp`.
 ///
 /// Asserts `@popCount(bitboard) == outp.len`.
@@ -113,8 +82,9 @@ pub fn suggestLayout(classes: []const Class, gpa: Allocator) Allocator.Error![]L
         const ids = &idss[idss_done];
         const class = classes[idss_done];
 
-        ids.mandatory = try class.mandatory(gpa);
+        ids.mandatory = try gpa.alloc(TeacherId, @popCount(class.mandatory_bitboard));
         errdefer gpa.free(ids.mandatory);
+        getTeachers(class.mandatory_bitboard, ids.mandatory);
 
         const optional_bitboard: TeacherBitboard = blk: {
             var r = class.optional_bitboard & ~total_mandatory_bitboard;

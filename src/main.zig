@@ -9,6 +9,7 @@ const Plan = @import("Plan.zig");
 const TimeSlot = @import("TimeSlot.zig");
 
 const Allocator = std.mem.Allocator;
+const Writer = std.Io.Writer;
 
 pub fn main() !void {
     const using_dbg_allocator = builtin.mode != .ReleaseFast;
@@ -30,19 +31,11 @@ pub fn main() !void {
         else => return err,
     };
 
-//    var thread_pool: std.Thread.Pool = undefined;
-//    try thread_pool.init(.{
-//        .allocator = gpa,
-//        .n_jobs = cli_options.jobs -| 1,
-//    });
-//    defer thread_pool.deinit();
-
     const progress_root = std.Progress.start(.{
         .root_name = "KKP",
-        .estimated_total_items = 4, // 1) Parse input
+        .estimated_total_items = 3, // 1) Parse input
                                     // 2) Combination generation
                                     // 3) Plan generation
-                                    // 4) Plan filtering
         .disable_printing = cli_options.quiet,
     });
 
@@ -95,26 +88,18 @@ pub fn main() !void {
     const time_slots = try TimeSlot.generateTimeSlots(gpa, restrictions, progress_root);
     defer gpa.free(time_slots);
 
-    const unfiltered_plans = try Plan.generatePlans(gpa, restrictions, time_slots, progress_root);
+    const plans = try Plan.generatePlans(gpa, restrictions, time_slots, progress_root);
     defer {
-        for (unfiltered_plans) |plan| {
+        for (plans) |plan| {
             gpa.free(plan.time_slots);
         }
-        gpa.free(unfiltered_plans);
-    }
-
-    const filtered_plans = try Plan.utils.filter(gpa, unfiltered_plans, progress_root);
-    defer {
-        for (filtered_plans) |plan| {
-            gpa.free(plan.time_slots);
-        }
-        gpa.free(filtered_plans);
+        gpa.free(plans);
     }
 
     progress_root.end();
 
     if (cli_options.output == null) { // Output to stdout.
-        try Plan.utils.print(filtered_plans, restrictions, stdout);
+        try printPlans(plans, restrictions, stdout);
         try stdout.flush();
     } else if (cli_options.output.?.len > 0) { // Output to file.
         const path = cli_options.output.?;
@@ -124,15 +109,21 @@ pub fn main() !void {
         var file_writer = file.writer(&file_buffer);
         const writer = &file_writer.interface;
 
-        try Plan.utils.print(filtered_plans, restrictions, writer);
+        try printPlans(plans, restrictions, stdout);
         try writer.flush();
 
         try file_writer.end();
     }
 
     if (!cli_options.quiet) {
-        try stdout.print("Found {d} plans in total.\n", .{unfiltered_plans.len});
-        try stdout.print("Found {d} plans after filtering.\n", .{filtered_plans.len});
+        try stdout.print("Found {d} plans.\n", .{plans.len});
         try stdout.flush();
+    }
+}
+
+fn printPlans(plans: []const Plan, restrictions: Restrictions, w: *Writer) Writer.Error!void {
+    for (plans) |plan| {
+        try plan.format(restrictions, w);
+        try w.print("\n", .{});
     }
 }

@@ -10,9 +10,6 @@ input: []const u8,
 /// `.len == 0` implies no output.
 output: ?[]const u8,
 
-///// Number of concurrent jobs.
-//jobs: usize,
-
 /// Whether to print stuff.
 /// (doesn't diable errors and program output)
 quiet: bool,
@@ -23,7 +20,6 @@ pub fn parse(args: []const []const u8, stdout: *std.Io.Writer) ParseError!CliOpt
     var outp: CliOptions = .{
         .input = undefined,
         .output = null,
-//        .jobs = @max(1, std.Thread.getCpuCount() catch 1),
         .quiet = false,
     };
     var input_set = false;
@@ -46,25 +42,6 @@ pub fn parse(args: []const []const u8, stdout: *std.Io.Writer) ParseError!CliOpt
             } else {
                 outp.output = arg[output_start..];
             }
-//        } else if (isArg("-j=", "--jobs=", arg)) |jobs_start| {
-//            if (jobs_start >= arg.len) {
-//                try stdout.print("Error: No number after --jobs.\n", .{});
-//                try stdout.flush();
-//                return error.ArgTooShort;
-//            }
-//            const jobs = arg[jobs_start..];
-//            outp.jobs = std.fmt.parseInt(usize, jobs, 10) catch |err| switch (err) {
-//                error.Overflow => {
-//                    try stdout.print("Error: Thread amount '{s}' too big.\n", .{jobs});
-//                    try stdout.flush();
-//                    return error.ArgJustStraightUpWrong;
-//                },
-//                error.InvalidCharacter => {
-//                    try stdout.print("Error: Thread amount '{s}' contains invalid characters.\n", .{jobs});
-//                    try stdout.flush();
-//                    return error.ArgJustStraightUpWrong;
-//                },
-//            };
         } else if (isArg("-q", "--quiet", arg)) |_| {
             outp.quiet = true;
         } else {
@@ -105,7 +82,6 @@ pub const help_message =
     \\Options:
     \\ -o=FILE --output=FILE  Write output to FILE, default: stdout.
     \\                        No output will be written if FILE is empty.
-  //\\ -j=NUM  --jobs=NUM     Use NUM threads, default: all available.
     \\ -q      --quiet        Do not print to stdout or stderr unnecessarily.
     \\
     \\ -h      --help         Print this help message and exit.

@@ -16,8 +16,6 @@ const Writer = std.Io.Writer;
 
 const Plan = @This();
 
-pub const utils = @import("Plan/utils.zig");
-
 /// Length guarantied to be <= `associated_restrictions.time_slots`.
 /// Time slots should be correct (have no mandatory overlap).
 time_slots: []const TimeSlot,
@@ -177,30 +175,27 @@ pub fn format(plan: Plan, restrictions: Restrictions, w: *Writer) Writer.Error!v
     // With default settings, this is gonna be around
     // 5184 bytes extra on the stack for the time slots
     // and 3328 for the suggested layout (8512 in total).
-    var ts_buffer: [options.class_limit * (@sizeOf(ClassId) + @sizeOf(Restrictions.Class))]u8 = undefined;
-    var ts_buffer_allocator = std.heap.FixedBufferAllocator.init(&ts_buffer);
-    const ts_arena = ts_buffer_allocator.allocator();
-
-    var layout_buffer: [options.teacher_limit * @sizeOf(Restrictions.Class.TeacherId) + 3 * options.class_limit * @sizeOf([]Restrictions.Class.TeacherId)]u8 = undefined;
-    var layout_buffer_allocator = std.heap.FixedBufferAllocator.init(&layout_buffer);
-    const layout_arena = layout_buffer_allocator.allocator();
+    const buffer_size = (@as(usize, options.class_limit) * (@sizeOf(ClassId) + @sizeOf(Restrictions.Class))) // Time slots
+                      + (@as(usize, options.teacher_limit) * @sizeOf(Restrictions.Class.TeacherId) + 3 * @as(usize, options.class_limit) * @sizeOf([]Restrictions.Class.TeacherId)); // Suggested layout
+    var buffer: [buffer_size]u8 = undefined;
+    var buffer_allocator = std.heap.FixedBufferAllocator.init(&buffer);
+    const arena = buffer_allocator.allocator();
 
     for (plan.time_slots, 0..) |ts, ts_id| {
         try w.print("{d}:\n", .{ts_id});
 
-        ts_buffer_allocator.reset();
-        const ts_class_ids = ts.classes(ts_arena) catch |err| switch (err) {
+        buffer_allocator.reset();
+        const ts_class_ids = ts.classes(arena) catch |err| switch (err) {
             error.OutOfMemory => unreachable,
         };
-        const ts_classes = ts_arena.alloc(Restrictions.Class, ts_class_ids.len) catch |err| switch (err) {
+        const ts_classes = arena.alloc(Restrictions.Class, ts_class_ids.len) catch |err| switch (err) {
             error.OutOfMemory => unreachable,
         };
         for (ts_class_ids, ts_classes) |id, *class| {
             class.* = restrictions.classes[id];
         }
 
-        layout_buffer_allocator.reset();
-        const layout = Restrictions.Class.suggestLayout(ts_classes, layout_arena) catch |err| switch (err) {
+        const layout = Restrictions.Class.suggestLayout(ts_classes, arena) catch |err| switch (err) {
             error.OutOfMemory => unreachable,
         };
         assert(ts_classes.len == layout.len);
